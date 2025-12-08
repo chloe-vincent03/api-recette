@@ -7,8 +7,12 @@ const app = express();
 // Import routes
 const recipeRoutes = require('./routes/recipes');
 const cuisineRoutes = require('./routes/cuisines');
+const goalsRoutes = require('./routes/goals');
+const dietRoutes = require('./routes/diet');
+const allergieRoutes = require('./routes/allergie');
 const ingredientRoutes = require('./routes/ingredients');
 const userRoutes = require('./routes/users');
+
 
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -40,6 +44,8 @@ app.use((req, res, next) => {
 app.use('/api/recipes', recipeRoutes);
 app.use('/api/cuisines', cuisineRoutes);
 app.use('/api/goals', goalsRoutes);
+app.use('/api/allergie', allergieRoutes);
+app.use('/api/diet', dietRoutes);
 app.use('/api/ingredients', ingredientRoutes);
 app.use('/api/users', userRoutes);
 
