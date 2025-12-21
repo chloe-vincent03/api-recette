@@ -359,6 +359,68 @@ router.post('/', authenticate, (req, res) => {
     );
 });
 
+router.post('/full', authenticate, (req, res) => {
+    const {
+        title, description, image_url,
+        cuisine_id, goal_id,
+        DietaryInformation_id, AllergiesInformation_id,
+        ingredients, instructions
+    } = req.body;
+
+    const userId = req.user.user_id;
+
+    if (!title || !description || !ingredients || !instructions) {
+        return res.status(400).json({
+            success: false,
+            message: 'Missing required fields'
+        });
+    }
+
+    database.serialize(() => {
+        database.run('BEGIN TRANSACTION');
+
+        database.run(
+            sql.create,
+            [title, description, image_url, cuisine_id, goal_id, DietaryInformation_id, AllergiesInformation_id, userId],
+            function (err) {
+                if (err) {
+                    database.run('ROLLBACK');
+                    return res.status(500).json({ error: err.message });
+                }
+
+                const recipeId = this.lastID;
+
+                // Ingrédients
+                const ingredientStmt = database.prepare(sql.addIngredient);
+                ingredients.forEach(i => {
+                    ingredientStmt.run(recipeId, i.ingredient_id, i.quantity);
+                });
+                ingredientStmt.finalize();
+
+                // Étapes
+                const instructionStmt = database.prepare(`
+                    INSERT INTO RecipeInstructions (recipe_id, step_number, description)
+                    VALUES (?, ?, ?)
+                `);
+
+                instructions.forEach(step => {
+                    instructionStmt.run(recipeId, step.step_number, step.description);
+                });
+                instructionStmt.finalize();
+
+                database.run('COMMIT');
+
+                res.status(201).json({
+                    success: true,
+                    message: 'Recipe created with ingredients and instructions',
+                    recipe_id: recipeId
+                });
+            }
+        );
+    });
+});
+
+
 /**
  * Add ingredient to recipe
  * POST /api/recipes/:id/ingredients
