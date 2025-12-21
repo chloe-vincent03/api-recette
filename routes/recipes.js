@@ -745,6 +745,112 @@ router.delete('/:id/ratings', authenticate, (req, res) => {
 });
 
 /**
+ * Update a recipe completely (fields, ingredients, instructions)
+ * PUT /api/recipes/:id/full
+ * Requires authentication + ownership
+ */
+router.put('/:id/full', authenticate, checkRecipeOwnership, (req, res) => {
+    const recipeId = req.params.id;
+    const {
+        title,
+        description,
+        image_url,
+        cuisine_id,
+        goal_id,
+        DietaryInformation_id,
+        AllergiesInformation_id,
+        ingredients,       // [{ ingredient_id, quantity }]
+        instructions       // [{ step_number, description }]
+    } = req.body;
+
+    if (!title && !description && !image_url && !cuisine_id && !goal_id && !DietaryInformation_id && !AllergiesInformation_id
+        && !ingredients && !instructions) {
+        return res.status(400).json({
+            success: false,
+            message: 'At least one field, ingredient, or instruction must be provided'
+        });
+    }
+
+    database.serialize(() => {
+        database.run('BEGIN TRANSACTION');
+
+        // --- Mise à jour des champs principaux ---
+        const fields = [];
+        const values = [];
+
+        if (title) { fields.push('title = ?'); values.push(title); }
+        if (description) { fields.push('description = ?'); values.push(description); }
+        if (image_url !== undefined) { fields.push('image_url = ?'); values.push(image_url); }
+        if (cuisine_id) { fields.push('cuisine_id = ?'); values.push(cuisine_id); }
+        if (goal_id) { fields.push('goal_id = ?'); values.push(goal_id); }
+        if (DietaryInformation_id) { fields.push('DietaryInformation_id = ?'); values.push(DietaryInformation_id); }
+        if (AllergiesInformation_id) { fields.push('AllergiesInformation_id = ?'); values.push(AllergiesInformation_id); }
+
+        if (fields.length > 0) {
+            values.push(recipeId);
+            database.run(`UPDATE Recipes SET ${fields.join(', ')} WHERE recipe_id = ?`, values, function(err) {
+                if (err) {
+                    database.run('ROLLBACK');
+                    return res.status(500).json({ success: false, message: 'Failed to update recipe fields', error: err.message });
+                }
+            });
+        }
+
+        // --- Mise à jour des ingrédients ---
+        if (ingredients) {
+            // Supprimer les anciens ingrédients
+            database.run(`DELETE FROM RecipeIngredients WHERE recipe_id = ?`, [recipeId], function(err) {
+                if (err) {
+                    database.run('ROLLBACK');
+                    return res.status(500).json({ success: false, message: 'Failed to clear old ingredients', error: err.message });
+                }
+
+                // Ajouter les nouveaux ingrédients
+                const stmt = database.prepare(sql.addIngredient);
+                ingredients.forEach(i => {
+                    stmt.run(recipeId, i.ingredient_id, i.quantity);
+                });
+                stmt.finalize();
+            });
+        }
+
+        // --- Mise à jour des instructions ---
+        if (instructions) {
+            // Supprimer les anciennes instructions
+            database.run(`DELETE FROM RecipeInstructions WHERE recipe_id = ?`, [recipeId], function(err) {
+                if (err) {
+                    database.run('ROLLBACK');
+                    return res.status(500).json({ success: false, message: 'Failed to clear old instructions', error: err.message });
+                }
+
+                // Ajouter les nouvelles instructions
+                const stmt = database.prepare(`
+                    INSERT INTO RecipeInstructions (recipe_id, step_number, description)
+                    VALUES (?, ?, ?)
+                `);
+                instructions.forEach(step => {
+                    stmt.run(recipeId, step.step_number, step.description);
+                });
+                stmt.finalize();
+            });
+        }
+
+        database.run('COMMIT', (err) => {
+            if (err) {
+                database.run('ROLLBACK');
+                return res.status(500).json({ success: false, message: 'Failed to commit transaction', error: err.message });
+            }
+
+            res.status(200).json({
+                success: true,
+                message: 'Recipe fully updated successfully'
+            });
+        });
+    });
+});
+
+
+/**
  * Get all ratings for a recipe
  * GET /api/recipes/:id/ratings
  * Public route (anyone can view ratings)
