@@ -11,7 +11,7 @@ const sql = {
     // GET queries
     getAll: `
         SELECT goal_id, name
-        FROM Goal
+        FROM Goals
         ORDER BY name ASC
     `,
 
@@ -22,8 +22,8 @@ const sql = {
 // ============================================
 
 /**
- * Get all cuisines
- * GET /api/cuisines
+ * Get all goals
+ * GET /api/goals
  */
 router.get('/', (req, res) => {
     database.all(sql.getAll, [], (err, rows) => {

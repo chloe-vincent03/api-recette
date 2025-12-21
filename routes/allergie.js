@@ -22,8 +22,8 @@ const sql = {
 // ============================================
 
 /**
- * Get all cuisines
- * GET /api/cuisines
+ * Get all allergies
+ * GET /api/allergies
  */
 router.get('/', (req, res) => {
     database.all(sql.getAll, [], (err, rows) => {
